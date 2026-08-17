@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { DM_Sans, Cormorant_Garamond } from 'next/font/google'
+import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
 
 const dmSans = DM_Sans({ 
@@ -80,6 +81,7 @@ export default function RootLayout({
       </head>
       <body className="font-sans antialiased">
         {children}
+        <Toaster position="top-center" richColors closeButton />
       </body>
     </html>
   )

@@ -1,35 +1,195 @@
-# plumberscape
+# Plumberscape
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
+Welcome to **Plumberscape** – a modern, full‑stack web application built for plumbing businesses to showcase their services, manage bookings, and connect with customers.
 
-## Built with v0
+## Table of Contents
 
-This repository is linked to a [v0](https://v0.app) project. You can continue developing by visiting the link below -- start new chats to make changes, and v0 will push commits directly to this repo. Every merge to `main` will automatically deploy.
+- [Project Overview](#project-overview)
+- [Demo](#demo)
+- [Tech Stack](#tech-stack)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+  - [Environment Variables](#environment-variables)
+- [Running the App](#running-the-app)
+- [Project Structure](#project-structure)
+- [Features](#features)
+- [Contributing](#contributing)
+- [License](#license)
+- [Contact](#contact)
 
-[Continue working on v0 →](https://v0.app/chat/projects/prj_tmVKPQZTHsqFyXn4pQMSkyG6qSbr)
+---
+
+## Project Overview
+
+Plumberscape is designed to help plumbing companies establish an online presence with a responsive, SEO‑friendly website. The platform includes:
+
+- **Hero Section** with a compelling call‑to‑action
+- **Services Section** detailing offered services
+- **Project Gallery** showcasing past work
+- **Testimonials Section** for client feedback
+- **Contact Form** for lead generation
+- **Admin Dashboard** (via the `theme-provider.tsx` component) for easy branding and configuration
+
+The project follows modern React best practices, utilizes TypeScript, and is styled with Tailwind CSS for a polished, consistent UI.
+
+---
+
+## Demo
+
+[Insert live demo URL here] – *(Replace with the actual URL when available)*
+
+---
+
+## Tech Stack
+
+- **React 18** + **TypeScript**
+- **Next.js** (App Router)
+- **Tailwind CSS**
+- **React Hook Form** & **Zod** for form validation
+- **Node.js** (v18+) for server‑side logic
+- **pnpm** as the package manager
+- **Docker** (optional) for containerized development
+
+---
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- **Node.js** (v18+)
+- **pnpm** (v8+)
+- **Git**
+- (Optional) **Docker** and **Docker Compose**
+
+### Installation
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/Codingvibes8/plumberscape.git
+   cd plumberscape
+   ```
+
+2. Install dependencies:
+
+   ```bash
+   pnpm install
+   ```
+
+3. Build the project:
+
+   ```bash
+   pnpm build
+   ```
+
+### Environment Variables
+
+Create a `.env.local` file in the project root with the following variables (example values):
+
+```env
+NEXT_PUBLIC_API_ENDPOINT=https://api.example.com
+DATABASE_URL=your_database_connection_string
+SECRET_KEY=your_secret_key
+```
+
+---
+
+## Running the App
+
+Start the development server:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The app will be available at `http://localhost:3000`. Open your browser to view the site.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+To run tests:
 
-## Learn More
+```bash
+pnpm test
+```
 
-To learn more, take a look at the following resources:
+To preview the production build:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [v0 Documentation](https://v0.app/docs) - learn about v0 and how to use it.
+```bash
+pnpm start
+```
 
-<a href="https://v0.app/chat/api/kiro/clone/Codingvibes8/plumberscape" alt="Open in Kiro"><img src="https://pdgvvgmkdvyeydso.public.blob.vercel-storage.com/open%20in%20kiro.svg?sanitize=true" /></a>
+---
+
+## Project Structure
+
+```
+plumberscape/
+├─ app/                # Next.js app directory (pages & layout)
+│   ├─ layout.tsx
+│   └─ page.tsx
+├─ components/         # Reusable UI components
+│   ├─ ContactForm.tsx
+│   ├─ Footer.tsx
+│   ├─ HeroSection.tsx
+│   ├─ Navbar.tsx
+│   ├─ ProjectGallery.tsx
+│   ├─ ServicesSection.tsx
+│   ├─ TestimonialsSection.tsx
+│   └─ theme-provider.tsx
+├─ components/ui/      # UI primitives (buttons, inputs, etc.)
+├─ hooks/              # Custom hooks
+│   ├─ use-mobile.ts
+│   └─ use-toast.ts
+├─ lib/                # Utility functions
+│   └─ utils.ts
+├─ public/             # Static assets (images, icons, etc.)
+├─ styles/             # Global CSS and Tailwind configuration
+│   └─ globals.css
+├─ .next/              # Next.js build output (generated)
+├─ .gitignore
+├─ next.config.mjs
+├─ package.json
+├─ pnpm-lock.yaml
+├─ postcss.config.mjs
+├─ tsconfig.json
+└─ README.md
+```
+
+---
+
+## Features
+
+- **Responsive Design** – Works on mobile, tablet, and desktop.
+- **Dark Mode** – Toggleable theme via the `theme-provider.tsx`.
+- **SEO Optimized** – Meta tags, Open Graph, and structured data.
+- **Accessibility** – WCAG‑compliant components.
+- **Easy Customization** – Theme variables and branding can be adjusted in one place.
+
+---
+
+## Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feature/YourFeature`).
+3. Commit your changes (`git commit -m "Add YourFeature"`).
+4. Push to the branch (`git push origin feature/YourFeature`).
+5. Open a Pull Request.
+
+Please ensure your code passes linting (`pnpm lint`) and formatting checks (`pnpm format`). Run the test suite before submitting a PR.
+
+---
+
+## License
+
+This project is licensed under the **MIT License** – see the `LICENSE` file for details.
+
+---
+
+## Contact
+
+- **Author:** Codingvibes8
+- **Email:** <codingvibes8@example.com>
+- **GitHub:** [https://github.com/Codingvibes8/plumberscape](https://github.com/Codingvibes8/plumberscape)
+
+Feel free to reach out with questions, feedback, or collaboration opportunities.

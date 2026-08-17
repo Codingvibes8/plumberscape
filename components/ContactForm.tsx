@@ -1,59 +1,68 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useEffect, useRef, useState } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { toast } from "sonner"
 
-const serviceTypes = [
-  "Emergency Plumbing",
-  "Boiler Services",
-  "Drain Cleaning",
-  "Bathroom Installation",
-  "Leak Detection",
-  "Commercial Plumbing",
-]
+import {
+  budgetRanges,
+  contactSchema,
+  preferredContactMethods,
+  preferredTimes,
+  projectSizes,
+  serviceTypes,
+  type ContactFormData,
+} from "@/lib/validations/contact"
 
-const projectSizes = ["Small", "Medium", "Large", "Enterprise"]
+const inputBaseClass =
+  "mt-2 w-full rounded-lg border bg-white/10 px-4 py-3 text-ivory placeholder-ivory/50 backdrop-blur-sm transition-colors focus:border-blue focus:outline-none focus:ring-1 focus:ring-blue"
 
-const budgetRanges = [
-  "Under £500",
-  "£500 - £2,000",
-  "£2,000 - £5,000",
-  "£5,000+",
-]
+const inputErrorClass = "border-red-500"
+const inputNormalClass = "border-ivory/20"
 
-interface FormData {
-  name: string
-  email: string
-  phone: string
-  serviceType: string
-  projectSize: string
-  message: string
-  budgetRange: string
-  honeypot: string
-}
-
-interface FormErrors {
-  name?: string
-  email?: string
-  message?: string
-}
+const pillBaseClass =
+  "cursor-pointer rounded-full px-4 py-2 text-sm font-medium transition-all"
 
 export default function ContactForm() {
-  const [formData, setFormData] = useState<FormData>({
-    name: "",
-    email: "",
-    phone: "",
-    serviceType: "",
-    projectSize: "",
-    message: "",
-    budgetRange: "",
-    honeypot: "",
-  })
-  const [errors, setErrors] = useState<FormErrors>({})
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
+  const [referenceId, setReferenceId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState("")
   const [isVisible, setIsVisible] = useState(false)
   const sectionRef = useRef<HTMLElement>(null)
+  const startedAtRef = useRef<number>(Date.now())
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm<ContactFormData>({
+    resolver: zodResolver(contactSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      phone: "",
+      postcode: "",
+      serviceType: "",
+      projectSize: "",
+      budgetRange: "",
+      preferredContactMethod: "Email",
+      preferredTime: "No preference",
+      message: "",
+      consent: false,
+      honeypot: "",
+      clientTime: 0,
+    },
+  })
+
+  const messageLength = (watch("message") ?? "").length
+  const watchedProjectSize = watch("projectSize")
+  const watchedBudgetRange = watch("budgetRange")
+  const watchedContactMethod = watch("preferredContactMethod")
+  const watchedPreferredTime = watch("preferredTime")
+  const watchedConsent = watch("consent")
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -73,71 +82,78 @@ export default function ContactForm() {
     return () => observer.disconnect()
   }, [])
 
-  const validateField = (name: string, value: string): string => {
-    switch (name) {
-      case "name":
-        return value.trim().length < 2 ? "Please enter your full name" : ""
-      case "email":
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        return !emailRegex.test(value) ? "Please enter a valid email address" : ""
-      case "message":
-        return value.trim().length < 20
-          ? "Please provide at least 20 characters describing your needs"
-          : ""
-      default:
-        return ""
+  const onSubmitInvalid = () => {
+    const firstErrorField = Object.keys(errors)[0]
+    if (firstErrorField) {
+      document.getElementById(firstErrorField)?.focus()
     }
+    toast.error("Please check the highlighted fields", {
+      description: "A few details need your attention before we can send your request.",
+    })
   }
 
-  const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
-    const error = validateField(name, value)
-    setErrors((prev) => ({ ...prev, [name]: error }))
-  }
-
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
-  ) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-    if (errors[name as keyof FormErrors]) {
-      setErrors((prev) => ({ ...prev, [name]: "" }))
-    }
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    // Honeypot check
-    if (formData.honeypot) {
-      return
-    }
-
-    // Validate all fields
-    const newErrors: FormErrors = {
-      name: validateField("name", formData.name),
-      email: validateField("email", formData.email),
-      message: validateField("message", formData.message),
-    }
-
-    setErrors(newErrors)
-
-    if (Object.values(newErrors).some((error) => error)) {
-      return
-    }
-
-    setIsSubmitting(true)
+  const onSubmit = async (data: ContactFormData) => {
     setSubmitError("")
 
-    // Simulate API call
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-      setIsSuccess(true)
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...data, clientTime: startedAtRef.current }),
+      })
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean
+        referenceId?: string
+        message?: string
+        fieldErrors?: Record<string, string[]>
+      }
+
+      if (response.ok && payload.ok) {
+        setReferenceId(payload.referenceId ?? null)
+        setIsSuccess(true)
+        toast.success("Request received", {
+          description: `Reference ${payload.referenceId}. We'll be in touch within 24 hours.`,
+        })
+        return
+      }
+
+      if (response.status === 429) {
+        toast.error("Too many requests", {
+          description: "Please wait a minute before trying again.",
+        })
+        setSubmitError("You've sent several requests recently. Please wait a minute and try again.")
+        return
+      }
+
+      toast.error("Something went wrong", {
+        description: payload.message ?? "Please try again or call us on 020 7123 4567.",
+      })
+      setSubmitError(payload.message ?? "Something went wrong. Please try again or call us directly.")
     } catch {
+      toast.error("Connection error", {
+        description: "Please check your internet connection and try again.",
+      })
       setSubmitError("Something went wrong. Please try again or call us directly.")
-    } finally {
-      setIsSubmitting(false)
     }
+  }
+
+  const resetForm = () => {
+    setValue("name", "")
+    setValue("email", "")
+    setValue("phone", "")
+    setValue("postcode", "")
+    setValue("serviceType", "")
+    setValue("projectSize", "")
+    setValue("budgetRange", "")
+    setValue("preferredContactMethod", "Email")
+    setValue("preferredTime", "No preference")
+    setValue("message", "")
+    setValue("consent", false)
+    setIsSuccess(false)
+    setReferenceId(null)
+    setSubmitError("")
+    startedAtRef.current = Date.now()
   }
 
   if (isSuccess) {
@@ -157,21 +173,40 @@ export default function ContactForm() {
               </svg>
             </div>
             <h2 className="font-display text-3xl font-bold text-ivory sm:text-4xl">
-              Thank You, {formData.name.split(" ")[0]}!
+              Thank You, {watch("name").split(" ")[0] || "There"}!
             </h2>
             <p className="mt-4 text-lg text-ivory/80">
               We&apos;ve received your enquiry and will be in touch within 24 hours.
               For urgent matters, please call us directly.
             </p>
-            <a
-              href="tel:+442071234567"
-              className="mt-8 inline-flex items-center gap-2 rounded-full bg-blue px-8 py-4 font-semibold text-white transition-all hover:bg-blue/90"
-            >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-              </svg>
-              020 7123 4567
-            </a>
+
+            {referenceId && (
+              <div className="mx-auto mt-8 inline-flex items-center gap-3 rounded-full border border-ivory/20 bg-white/10 px-6 py-3">
+                <span className="text-sm text-ivory/70">Your reference:</span>
+                <span className="font-mono text-lg font-semibold tracking-wider text-copper">
+                  {referenceId}
+                </span>
+              </div>
+            )}
+
+            <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
+              <a
+                href="tel:+442071234567"
+                className="inline-flex items-center gap-2 rounded-full bg-blue px-8 py-4 font-semibold text-white transition-all hover:bg-blue/90"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
+                020 7123 4567
+              </a>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="inline-flex items-center gap-2 rounded-full border border-ivory/30 px-8 py-4 font-semibold text-ivory transition-all hover:bg-white/10"
+              >
+                Submit Another Enquiry
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -179,11 +214,7 @@ export default function ContactForm() {
   }
 
   return (
-    <section
-      id="contact"
-      ref={sectionRef}
-      className="bg-navy py-20 lg:py-32"
-    >
+    <section id="contact" ref={sectionRef} className="bg-navy py-20 lg:py-32">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className={`text-center ${isVisible ? "animate-fade-up" : "opacity-0"}`}>
@@ -200,22 +231,25 @@ export default function ContactForm() {
           {/* Form */}
           <div className={`lg:col-span-3 ${isVisible ? "animate-fade-up stagger-2" : "opacity-0"}`}>
             {submitError && (
-              <div className="mb-6 rounded-lg bg-red-500/20 p-4 text-red-300">
+              <div
+                role="alert"
+                className="mb-6 rounded-lg bg-red-500/20 p-4 text-sm text-red-300"
+              >
                 {submitError}
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Honeypot */}
+            <form onSubmit={handleSubmit(onSubmit, onSubmitInvalid)} className="space-y-6" noValidate>
+              {/* Honeypot (hidden from humans and screen readers) */}
               <input
                 type="text"
-                name="honeypot"
-                value={formData.honeypot}
-                onChange={handleChange}
+                {...register("honeypot")}
                 className="hidden"
                 tabIndex={-1}
                 autoComplete="off"
+                aria-hidden="true"
               />
+              <input type="hidden" {...register("clientTime")} />
 
               <div className="grid gap-6 sm:grid-cols-2">
                 {/* Name */}
@@ -226,16 +260,17 @@ export default function ContactForm() {
                   <input
                     type="text"
                     id="name"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    className={`mt-2 w-full rounded-lg border bg-white/10 px-4 py-3 text-ivory placeholder-ivory/50 backdrop-blur-sm transition-colors focus:border-blue focus:outline-none focus:ring-1 focus:ring-blue ${
-                      errors.name ? "border-red-500" : "border-ivory/20"
-                    }`}
+                    {...register("name")}
+                    aria-invalid={!!errors.name}
+                    aria-describedby={errors.name ? "name-error" : undefined}
+                    className={`${inputBaseClass} ${errors.name ? inputErrorClass : inputNormalClass}`}
                     placeholder="John Smith"
                   />
-                  {errors.name && <p className="mt-1 text-sm text-red-400">{errors.name}</p>}
+                  {errors.name && (
+                    <p id="name-error" className="mt-1 text-sm text-red-400">
+                      {errors.name.message}
+                    </p>
+                  )}
                 </div>
 
                 {/* Email */}
@@ -246,16 +281,18 @@ export default function ContactForm() {
                   <input
                     type="email"
                     id="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    className={`mt-2 w-full rounded-lg border bg-white/10 px-4 py-3 text-ivory placeholder-ivory/50 backdrop-blur-sm transition-colors focus:border-blue focus:outline-none focus:ring-1 focus:ring-blue ${
-                      errors.email ? "border-red-500" : "border-ivory/20"
-                    }`}
+                    {...register("email")}
+                    aria-invalid={!!errors.email}
+                    aria-describedby={errors.email ? "email-error" : undefined}
+                    className={`${inputBaseClass} ${errors.email ? inputErrorClass : inputNormalClass}`}
                     placeholder="john@example.com"
+                    autoComplete="email"
                   />
-                  {errors.email && <p className="mt-1 text-sm text-red-400">{errors.email}</p>}
+                  {errors.email && (
+                    <p id="email-error" className="mt-1 text-sm text-red-400">
+                      {errors.email.message}
+                    </p>
+                  )}
                 </div>
 
                 {/* Phone */}
@@ -266,25 +303,53 @@ export default function ContactForm() {
                   <input
                     type="tel"
                     id="phone"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleChange}
-                    className="mt-2 w-full rounded-lg border border-ivory/20 bg-white/10 px-4 py-3 text-ivory placeholder-ivory/50 backdrop-blur-sm transition-colors focus:border-blue focus:outline-none focus:ring-1 focus:ring-blue"
+                    {...register("phone")}
+                    aria-invalid={!!errors.phone}
+                    aria-describedby={errors.phone ? "phone-error" : undefined}
+                    className={`${inputBaseClass} ${errors.phone ? inputErrorClass : inputNormalClass}`}
                     placeholder="020 1234 5678"
+                    autoComplete="tel"
                   />
+                  {errors.phone && (
+                    <p id="phone-error" className="mt-1 text-sm text-red-400">
+                      {errors.phone.message}
+                    </p>
+                  )}
+                </div>
+
+                {/* Postcode */}
+                <div>
+                  <label htmlFor="postcode" className="block text-sm font-medium text-ivory">
+                    Postcode
+                  </label>
+                  <input
+                    type="text"
+                    id="postcode"
+                    {...register("postcode")}
+                    aria-invalid={!!errors.postcode}
+                    aria-describedby={errors.postcode ? "postcode-error" : undefined}
+                    className={`${inputBaseClass} ${errors.postcode ? inputErrorClass : inputNormalClass}`}
+                    placeholder="NW1 2AB"
+                    autoComplete="postal-code"
+                  />
+                  {errors.postcode && (
+                    <p id="postcode-error" className="mt-1 text-sm text-red-400">
+                      {errors.postcode.message}
+                    </p>
+                  )}
                 </div>
 
                 {/* Service Type */}
                 <div>
                   <label htmlFor="serviceType" className="block text-sm font-medium text-ivory">
-                    Service Required
+                    Service Required <span className="text-copper">*</span>
                   </label>
                   <select
                     id="serviceType"
-                    name="serviceType"
-                    value={formData.serviceType}
-                    onChange={handleChange}
-                    className="mt-2 w-full rounded-lg border border-ivory/20 bg-white/10 px-4 py-3 text-ivory backdrop-blur-sm transition-colors focus:border-blue focus:outline-none focus:ring-1 focus:ring-blue"
+                    {...register("serviceType")}
+                    aria-invalid={!!errors.serviceType}
+                    aria-describedby={errors.serviceType ? "serviceType-error" : undefined}
+                    className={`${inputBaseClass} ${errors.serviceType ? inputErrorClass : inputNormalClass}`}
                   >
                     <option value="" className="text-navy">Select a service</option>
                     {serviceTypes.map((service) => (
@@ -293,106 +358,210 @@ export default function ContactForm() {
                       </option>
                     ))}
                   </select>
+                  {errors.serviceType && (
+                    <p id="serviceType-error" className="mt-1 text-sm text-red-400">
+                      {errors.serviceType.message}
+                    </p>
+                  )}
                 </div>
               </div>
 
               {/* Project Size */}
-              <div>
-                <label className="block text-sm font-medium text-ivory">Project Size</label>
+              <fieldset>
+                <legend className="block text-sm font-medium text-ivory">
+                  Project Size <span className="text-copper">*</span>
+                </legend>
                 <div className="mt-2 flex flex-wrap gap-3">
                   {projectSizes.map((size) => (
                     <label
                       key={size}
-                      className={`cursor-pointer rounded-full px-4 py-2 text-sm font-medium transition-all ${
-                        formData.projectSize === size
+                      className={`${pillBaseClass} ${
+                        watchedProjectSize === size
                           ? "bg-blue text-white"
                           : "bg-white/10 text-ivory hover:bg-white/20"
                       }`}
                     >
                       <input
                         type="radio"
-                        name="projectSize"
                         value={size}
-                        checked={formData.projectSize === size}
-                        onChange={handleChange}
+                        {...register("projectSize")}
                         className="sr-only"
                       />
                       {size}
                     </label>
                   ))}
                 </div>
-              </div>
+                {errors.projectSize && (
+                  <p className="mt-1 text-sm text-red-400">{errors.projectSize.message}</p>
+                )}
+              </fieldset>
 
               {/* Budget Range */}
-              <div>
-                <label className="block text-sm font-medium text-ivory">Budget Range</label>
+              <fieldset>
+                <legend className="block text-sm font-medium text-ivory">
+                  Budget Range <span className="text-copper">*</span>
+                </legend>
                 <div className="mt-2 flex flex-wrap gap-3">
                   {budgetRanges.map((budget) => (
                     <label
                       key={budget}
-                      className={`cursor-pointer rounded-full px-4 py-2 text-sm font-medium transition-all ${
-                        formData.budgetRange === budget
+                      className={`${pillBaseClass} ${
+                        watchedBudgetRange === budget
                           ? "bg-copper text-white"
                           : "bg-white/10 text-ivory hover:bg-white/20"
                       }`}
                     >
                       <input
                         type="radio"
-                        name="budgetRange"
                         value={budget}
-                        checked={formData.budgetRange === budget}
-                        onChange={handleChange}
+                        {...register("budgetRange")}
                         className="sr-only"
                       />
                       {budget}
                     </label>
                   ))}
                 </div>
+                {errors.budgetRange && (
+                  <p className="mt-1 text-sm text-red-400">{errors.budgetRange.message}</p>
+                )}
+              </fieldset>
+
+              <div className="grid gap-6 sm:grid-cols-2">
+                {/* Preferred Contact Method */}
+                <fieldset>
+                  <legend className="block text-sm font-medium text-ivory">
+                    Preferred Contact Method
+                  </legend>
+                  <div className="mt-2 flex flex-wrap gap-3">
+                    {preferredContactMethods.map((method) => (
+                      <label
+                        key={method}
+                        className={`${pillBaseClass} ${
+                          watchedContactMethod === method
+                            ? "bg-blue text-white"
+                            : "bg-white/10 text-ivory hover:bg-white/20"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          value={method}
+                          {...register("preferredContactMethod")}
+                          className="sr-only"
+                        />
+                        {method}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+
+                {/* Preferred Time */}
+                <fieldset>
+                  <legend className="block text-sm font-medium text-ivory">
+                    Preferred Time
+                  </legend>
+                  <div className="mt-2 flex flex-wrap gap-3">
+                    {preferredTimes.map((time) => (
+                      <label
+                        key={time}
+                        className={`${pillBaseClass} ${
+                          watchedPreferredTime === time
+                            ? "bg-blue text-white"
+                            : "bg-white/10 text-ivory hover:bg-white/20"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          value={time}
+                          {...register("preferredTime")}
+                          className="sr-only"
+                        />
+                        {time}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
               </div>
 
               {/* Message */}
               <div>
-                <label htmlFor="message" className="block text-sm font-medium text-ivory">
-                  Tell Us About Your Project <span className="text-copper">*</span>
-                </label>
+                <div className="flex items-baseline justify-between">
+                  <label htmlFor="message" className="block text-sm font-medium text-ivory">
+                    Tell Us About Your Project <span className="text-copper">*</span>
+                  </label>
+                  <span className="text-xs text-ivory/50">{messageLength}/5000</span>
+                </div>
                 <textarea
                   id="message"
-                  name="message"
-                  rows={4}
-                  value={formData.message}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  className={`mt-2 w-full rounded-lg border bg-white/10 px-4 py-3 text-ivory placeholder-ivory/50 backdrop-blur-sm transition-colors focus:border-blue focus:outline-none focus:ring-1 focus:ring-blue ${
-                    errors.message ? "border-red-500" : "border-ivory/20"
-                  }`}
+                  rows={5}
+                  {...register("message")}
+                  aria-invalid={!!errors.message}
+                  aria-describedby={errors.message ? "message-error" : undefined}
+                  className={`${inputBaseClass} resize-none ${errors.message ? inputErrorClass : inputNormalClass}`}
                   placeholder="Describe your plumbing needs, any specific issues, preferred timing, etc."
                 />
-                {errors.message && <p className="mt-1 text-sm text-red-400">{errors.message}</p>}
+                {errors.message && (
+                  <p id="message-error" className="mt-1 text-sm text-red-400">
+                    {errors.message.message}
+                  </p>
+                )}
+              </div>
+
+              {/* GDPR Consent */}
+              <div>
+                <label className="flex items-start gap-3 text-sm text-ivory/80">
+                  <input
+                    type="checkbox"
+                    {...register("consent")}
+                    aria-invalid={!!errors.consent}
+                    aria-describedby={errors.consent ? "consent-error" : undefined}
+                    className="mt-0.5 h-4 w-4 rounded border-ivory/30 bg-white/10 accent-blue"
+                  />
+                  <span>
+                    I agree to PlumbScape storing and using my details to respond to this
+                    enquiry, in line with our privacy policy. <span className="text-copper">*</span>
+                  </span>
+                </label>
+                {errors.consent && (
+                  <p id="consent-error" className="mt-1 text-sm text-red-400">
+                    {errors.consent.message}
+                  </p>
+                )}
+                {watchedConsent && (
+                  <p className="mt-2 text-xs text-ivory/50">
+                    Your details are used solely to arrange your quote and will never be shared with third parties.
+                  </p>
+                )}
               </div>
 
               {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-blue px-8 py-4 font-semibold text-white transition-all hover:bg-blue/90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-              >
-                {isSubmitting ? (
-                  <>
-                    <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    Submit Request
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                    </svg>
-                  </>
-                )}
-              </button>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-blue px-8 py-4 font-semibold text-white transition-all hover:bg-blue/90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      Submit Request
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                      </svg>
+                    </>
+                  )}
+                </button>
+                <p className="text-xs text-ivory/50">
+                  We&apos;ll reply within 24 hours. Your enquiry is protected by our
+                  privacy policy.
+                </p>
+              </div>
             </form>
           </div>
 
@@ -400,7 +569,7 @@ export default function ContactForm() {
           <div className={`lg:col-span-2 ${isVisible ? "animate-fade-up stagger-3" : "opacity-0"}`}>
             <div className="rounded-2xl bg-white/5 p-8 backdrop-blur-sm">
               <h3 className="font-display text-xl font-semibold text-ivory">Contact Information</h3>
-              
+
               <div className="mt-8 space-y-6">
                 <div className="flex items-start gap-4">
                   <div className="rounded-lg bg-blue/20 p-3">
